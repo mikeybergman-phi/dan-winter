@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dodecahedral φ-Log Spirals — Spin + Electric Pulse (Patched)</title>
+<style>
+  html, body { height:100%; margin:0; background:#0b0e13; color:#e7eaee; font:14px ui-sans-serif, system-ui, -apple-system; }
+  #app { position:fixed; inset:0; }
+  .ui { position:fixed; top:12px; left:12px; background:rgba(15,22,32,.92); border:1px solid #233244;
+        border-radius:12px; padding:12px; display:grid; gap:10px; min-width:360px }
+  .row { display:flex; align-items:center; gap:10px; }
+  .row label { flex:1; color:#9fb1c7 }
+  .row input[type="range"] { flex:2 }
+  .row output { min-width:64px; text-align:right; color:#7ae0ff }
+  .small { color:#9fb1c7; font-size:12px; line-height:1.35 }
+  button { background:#0f1725; border:1px solid #2c4461; color:#e7eaee; padding:6px 10px; border-radius:8px; cursor:pointer }
+  button:hover { border-color:#446c96 }
+  .chk { display:flex; gap:12px; align-items:center; flex-wrap:wrap }
+  .subgrid { display:grid; gap:8px; grid-template-columns: 1fr auto; align-items:center }
+  .section { border-top:1px solid #233244; padding-top:8px; margin-top:4px }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="ui">
+  <div class="small">
+    <strong>φ-Log Spirals on Dodeca Faces</strong> — apex <b>63.435°</b>, 12 face normals (icosahedron vertices).<br>
+    <b>Paired colors:</b> opposite faces share a color (6 total).<br>
+    <b>5 spirals per face:</b> pentagon vertices. <b>Spin:</b> top CCW, bottom CW. <b>Pulse:</b> optional electric wave inward.
+  </div>
+
+  <div class="row">
+    <label>Start radius a</label>
+    <input id="a" type="range" min="0.15" max="2.5" step="0.01" value="0.9">
+    <output id="aOut">0.90</output>
+  </div>
+  <div class="row">
+    <label>Inward turns</label>
+    <input id="turns" type="range" min="0.5" max="10" step="0.5" value="5">
+    <output id="turnsOut">5.0</output>
+  </div>
+  <div class="row">
+    <label>Thickness</label>
+    <input id="thick" type="range" min="0.004" max="0.15" step="0.002" value="0.032">
+    <output id="thickOut">0.032</output>
+  </div>
+  <div class="row">
+    <label>Segments</label>
+    <input id="segs" type="range" min="200" max="4000" step="50" value="1500">
+    <output id="segsOut">1500</output>
+  </div>
+  <div class="row">
+    <label>Spin speed (rev/s)</label>
+    <input id="spin" type="range" min="0" max="2" step="0.01" value="0.35">
+    <output id="spinOut">0.35</output>
+  </div>
+
+  <div class="row">
+    <div class="chk">
+      <label class="small"><input id="toggleGrid" type="checkbox" checked> Grid</label>
+      <label class="small"><input id="toggleAxes" type="checkbox"> Axes</label>
+      <label class="small"><input id="toggleCones" type="checkbox"> Show cones</label>
+      <label class="small"><input id="togglePulse" type="checkbox"> Electric pulse</label>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="small"><strong>Pulse controls</strong> (active when “Electric pulse” is on)</div>
+    <div class="subgrid">
+      <label>Pulse rate (cycles/s)</label>
+      <div>
+        <input id="pulseRate" type="range" min="0.05" max="4" step="0.01" value="1.0">
+        <output id="pulseRateOut">1.00</output>
+      </div>
+      <label>Pulse width</label>
+      <div>
+        <input id="pulseWidth" type="range" min="0.01" max="0.25" step="0.005" value="0.06">
+        <output id="pulseWidthOut">0.060</output>
+      </div>
+      <label>Pulse intensity</label>
+      <div>
+        <input id="pulseIntensity" type="range" min="0" max="3" step="0.05" value="1.4">
+        <output id="pulseIntensityOut">1.40</output>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <button id="resetView">Reset view</button>
+  </div>
+</div>
+
+<!-- Import map -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+  import * as THREE from "three";
+  import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+  const PHI = (1 + Math.sqrt(5)) / 2;
+  const K = 2 * Math.log(PHI) / Math.PI;
+  const APEX_DEG = 63.435;
+  const HALF_ANGLE = (APEX_DEG * Math.PI / 180) / 2;
+  const m = Math.tan(HALF_ANGLE);
+  const TWO_PI = Math.PI * 2;
+
+  const ui = {
+    a:document.getElementById('a'), turns:document.getElementById('turns'),
+    thick:document.getElementById('thick'), segs:document.getElementById('segs'),
+    spin:document.getElementById('spin'),
+    toggleGrid:document.getElementById('toggleGrid'),
+    toggleAxes:document.getElementById('toggleAxes'),
+    toggleCones:document.getElementById('toggleCones'),
+    togglePulse:document.getElementById('togglePulse'),
+    pulseRate:document.getElementById('pulseRate'),
+    pulseWidth:document.getElementById('pulseWidth'),
+    pulseIntensity:document.getElementById('pulseIntensity'),
+    aOut:document.getElementById('aOut'), turnsOut:document.getElementById('turnsOut'),
+    thickOut:document.getElementById('thickOut'), segsOut:document.getElementById('segsOut'),
+    spinOut:document.getElementById('spinOut'),
+    pulseRateOut:document.getElementById('pulseRateOut'),
+    pulseWidthOut:document.getElementById('pulseWidthOut'),
+    pulseIntensityOut:document.getElementById('pulseIntensityOut'),
+    resetView:document.getElementById('resetView')
+  };
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0e13);
+  const camera = new THREE.PerspectiveCamera(56, innerWidth/innerHeight, 0.01, 2000);
+  camera.position.set(4.6, 3.3, 4.8);
+
+  // Context creation with GL2→GL1 fallback
+  const appEl = document.getElementById('app');
+  const canvas = document.createElement('canvas');
+  canvas.style.width = '100%'; canvas.style.height = '100%';
+  appEl.appendChild(canvas);
+
+  function overlay(msg){
+    const el=document.createElement('div');
+    el.style.cssText='position:fixed;inset:0;display:grid;place-items:center;background:#0b0e13;color:#e7eaee;';
+    el.innerHTML='<div style="padding:24px;border:1px solid #233244;border-radius:12px;background:#0f1725cc">'+msg+'</div>';
+    return el;
+  }
+
+  let gl=null;
+  try{
+    gl=canvas.getContext('webgl2',{antialias:true,alpha:false});
+    if(!gl) gl=canvas.getContext('webgl',{antialias:true,alpha:false});
+  }catch(e){gl=null;}
+  if(!gl){
+    document.body.appendChild(overlay('Could not create a WebGL context.'));
+    throw new Error('No WebGL context');
+  }
+  const renderer=new THREE.WebGLRenderer({canvas,context:gl});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+
+  const controls=new OrbitControls(camera,renderer.domElement);
+  controls.enableDamping=true;
+
+  scene.add(new THREE.HemisphereLight(0xffffff,0x0a0f15,0.64));
+  const dir=new THREE.DirectionalLight(0xffffff,0.96);
+  dir.position.set(3,5,4); scene.add(dir);
+
+  const grid=new THREE.GridHelper(18,18,0x33506e,0x1e2a3a);
+  grid.material.transparent=true; grid.material.opacity=0.85; scene.add(grid);
+  const axes=new THREE.AxesHelper(1.8); axes.visible=false; scene.add(axes);
+
+  const worldGroup=new THREE.Group(); scene.add(worldGroup);
+
+  function deepDispose(obj){
+    obj.traverse(n=>{if(n.geometry) n.geometry.dispose();
+      if(n.material){if(Array.isArray(n.material))n.material.forEach(m=>m?.dispose?.()); else n.material.dispose?.();}});
+    while(obj.children.length) obj.remove(obj.children[0]);
+  }
+
+  function icosahedronDirections(){
+    const v=[];const f=PHI;const c=[
+      [0,1,f],[0,1,-f],[0,-1,f],[0,-1,-f],
+      [1,f,0],[-1,f,0],[1,-f,0],[-1,-f,0],
+      [f,0,1],[f,0,-1],[-f,0,1],[-f,0,-1]
+    ];
+    for(const x of c)v.push(new THREE.Vector3(x[0],x[1],x[2]).normalize());
+    return v;
+  }
+  const directions=icosahedronDirections();
+  function pairOpposites(dirs){
+    const used=new Array(dirs.length).fill(false),out=[];
+    for(let i=0;i<dirs.length;i++){if(used[i])continue;
+      let best=-1,bestDot=1;
+      for(let j=i+1;j<dirs.length;j++){if(used[j])continue;
+        const dot=dirs[i].dot(dirs[j]);if(dot<bestDot){bestDot=dot;best=j;}}
+      if(best>=0){used[i]=used[best]=true;out.push([i,best]);}}
+    return out;
+  }
+  const pairs=pairOpposites(directions);
+
+  class ConeLogSpiralLocal extends THREE.Curve{
+    constructor({a,thetaMax,handed=+1,phase=0}){super();this.a=a;this.thetaMax=thetaMax;this.handed=Math.sign(handed)||+1;this.phase=phase;}
+    getPoint(t){const th=t*this.thetaMax;const r=this.a*Math.exp(-K*th);const ang=this.handed*th+this.phase;
+      return new THREE.Vector3(r*Math.cos(ang),r/m,r*Math.sin(ang));}
+  }
+
+  function makePulsingMaterial(baseColor){
+    const mat=new THREE.MeshStandardMaterial({color:baseColor,roughness:0.35,metalness:0.15,
+      emissive:new THREE.Color(0x062838),emissiveIntensity:0.18});
+    const U=mat.userData.uniforms={
+      uTime:{value:0},uEnabled:{value:0},uRate:{value:parseFloat(ui.pulseRate.value)},
+      uWidth:{value:parseFloat(ui.pulseWidth.value)},uIntensity:{value:parseFloat(ui.pulseIntensity.value)}};
+    mat.onBeforeCompile=(shader)=>{
+      shader.defines=shader.defines||{};shader.defines.USE_UV='';
+      Object.assign(shader.uniforms,U);
+      shader.vertexShader=shader.vertexShader
+        .replace('#include <common>','#include <common>\nvarying vec2 vUv2;')
+        .replace('#include <uv_vertex>','#include <uv_vertex>\nvUv2=uv;');
+      shader.fragmentShader=shader.fragmentShader
+        .replace('#include <common>','#include <common>\nvarying vec2 vUv2;\nuniform float uTime;\nuniform float uEnabled;\nuniform float uRate;\nuniform float uWidth;\nuniform float uIntensity;')
+        .replace('#include <emissivemap_fragment>',`
+          #include <emissivemap_fragment>
+          if(uEnabled>0.5){
+            float head=fract(uTime*uRate);
+            float d=(vUv2.y-head)/max(uWidth,1e-4);
+            float falloff=exp(-d*d);
+            totalEmissiveRadiance+=diffuseColor.rgb*(uIntensity*falloff);
+          }`);
+    };
+    return mat;
+  }
+
+  function buildFaceGroup(n,color,{a,thetaMax,handed,segs,thick,cones}){
+    const g=new THREE.Group();
+    g.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),n);
+    const mats=[];const phaseStep=(2*Math.PI)/5;
+    for(let k=0;k<5;k++){const curve=new ConeLogSpiralLocal({a,thetaMax,handed,phase:k*phaseStep});
+      const geom=new THREE.TubeGeometry(curve,segs,thick,16,false);
+      const mat=makePulsingMaterial(new THREE.Color(color));
+      g.add(new THREE.Mesh(geom,mat));mats.push(mat);}
+    if(cones){const h=a/m;const coneGeom=new THREE.ConeGeometry(a,h,48,1,true);
+      coneGeom.translate(0,h/2,0);coneGeom.translate(0,-h,0);
+      g.add(new THREE.Mesh(coneGeom,new THREE.MeshBasicMaterial({wireframe:true,color:new THREE.Color(color).multiplyScalar(0.7),transparent:true,opacity:0.25,depthWrite:false}))); }
+    return{group:g,pulseMats:mats};
+  }
+
+  const spinningGroups=[],PALETTE=[0x7ae0ff,0xffb580,0x7ff1c8,0xff9aa8,0xaee6ff,0xffc188];let allPulseMats=[];
+  function buildAll(){
+    worldGroup.children.slice().forEach(ch=>{deepDispose(ch);worldGroup.remove(ch);});
+    spinningGroups.length=0;allPulseMats.length=0;
+    const a=+ui.a.value,turns=+ui.turns.value,thick=+ui.thick.value,segs=Math.max(50,Math.floor(+ui.segs.value));
+    const thetaMax=turns*Math.PI*2,cones=ui.toggleCones.checked;
+    pairs.forEach((pair,idx)=>{const color=new THREE.Color(PALETTE[idx%PALETTE.length]);
+      pair.forEach(faceIndex=>{const n=directions[faceIndex];const handed=(n.y>=0)?+1:-1;
+        const {group,pulseMats}=buildFaceGroup(n,color,{a,thetaMax,handed,segs,thick,cones});
+        worldGroup.add(group);spinningGroups.push({group,spinSign:(n.y>=0)?+1:-1});allPulseMats.push(...pulseMats);});});
+    updatePulseUniforms(true);
+  }
+  function updatePulseUniforms(reset){const en=ui.togglePulse.checked?1:0,rate=+ui.pulseRate.value,w=+ui.pulseWidth.value,intens=+ui.pulseIntensity.value;
+    allPulseMats.forEach(m=>{const U=m.userData.uniforms;if(!U)return;if(reset)U.uTime.value=0;
+      U.uEnabled.value=en;U.uRate.value=rate;U.uWidth.value=w;U.uIntensity.value=intens;m.needsUpdate=true;});}
+  function syncOut(){ui.aOut.textContent=(+ui.a.value).toFixed(2);ui.turnsOut.textContent=(+ui.turns.value).toFixed(1);
+    ui.thickOut.textContent=(+ui.thick.value).toFixed(3);ui.segsOut.textContent=(+ui.segs.value);
+    ui.spinOut.textContent=(+ui.spin.value).toFixed(2);ui.pulseRateOut.textContent=(+ui.pulseRate.value).toFixed(2);
+    ui.pulseWidthOut.textContent=(+ui.pulseWidth.value).toFixed(3);ui.pulseIntensityOut.textContent=(+ui.pulseIntensity.value).toFixed(2);}
+  ['a','turns','thick','segs','spin'].forEach(id=>ui[id].addEventListener('input',()=>{syncOut();buildAll();}));
+  ui.toggleGrid.addEventListener('change',()=>{grid.visible=ui.toggleGrid.checked;});
+  ui.toggleAxes.addEventListener('change',()=>{axes.visible=ui.toggleAxes.checked;});
+  ui.toggleCones.addEventListener('change',()=>{buildAll();});
+  ui.togglePulse.addEventListener('change',()=>{updatePulseUniforms(true);});
+  ['pulseRate','pulseWidth','pulseIntensity'].forEach(id=>ui[id].addEventListener('input',()=>{syncOut();updatePulseUniforms(false);}));  
+  ui.resetView.addEventListener('click',()=>{camera.position.set(4.6,3.3,4.8);controls.target.set(0,0.6,0);controls.update();});
+
+  syncOut(); buildAll(); controls.target.set(0,0.6,0); controls.update();
+
+  const clock=new THREE.Clock();
+  function tick(){
+    const dt=clock.getDelta();
+    const angVel=TWO_PI*(+ui.spin.value);
+    for(const {group,spinSign} of spinningGroups){group.rotateY(spinSign*angVel*dt);}
+    if(ui.togglePulse.checked){allPulseMats.forEach(m=>{const U=m.userData.uniforms;if(U)U.uTime.value+=dt;});}
+    controls.update(); renderer.render(scene,camera); requestAnimationFrame(tick);
+  }
+  tick();
+
+  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+</script>
+</body>
+</html>
