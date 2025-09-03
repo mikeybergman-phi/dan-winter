@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>φ-Log Spirals — Seeds Aligned to Top/Bottom</title>
+<style>
+  html, body { height:100%; margin:0; background:#0b0e13; color:#e7eaee; font:14px ui-sans-serif, system-ui, -apple-system; }
+  #app { position:fixed; inset:0; }
+  .ui { position:fixed; top:12px; left:12px; background:rgba(15,22,32,.92); border:1px solid #233244;
+        border-radius:12px; padding:12px; display:grid; gap:10px; min-width:460px }
+  .row { display:flex; align-items:center; gap:10px; }
+  .row label { flex:1; color:#9fb1c7 }
+  .row input[type="range"], .row select { flex:2 }
+  .row output { min-width:64px; text-align:right; color:#7ae0ff }
+  .small { color:#9fb1c7; font-size:12px; line-height:1.35 }
+  button { background:#0f1725; border:1px solid #2c4461; color:#e7eaee; padding:6px 10px; border-radius:8px; cursor:pointer }
+  button:hover { border-color:#446c96 }
+  .section { border-top:1px solid #233244; padding-top:8px; margin-top:4px }
+  .subgrid { display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="ui">
+  <div class="small">
+    <strong>Seeds are exactly at +Y (top) and −Y (bottom)</strong>. Use “Seed alignment view” to look straight down the seed axis.<br>
+    You can still toggle “Show only seed vortexes”.
+  </div>
+
+  <div class="row"><label>Start radius a</label><input id="a" type="range" min="0.15" max="2.5" step="0.01" value="0.9"><output id="aOut">0.90</output></div>
+  <div class="row"><label>Inward turns</label><input id="turns" type="range" min="0.5" max="10" step="0.5" value="5"><output id="turnsOut">5.0</output></div>
+  <div class="row"><label>Thickness</label><input id="thick" type="range" min="0.001" max="0.5" step="0.001" value="0.032"><output id="thickOut">0.032</output></div>
+  <div class="row"><label>Segments</label><input id="segs" type="range" min="100" max="4000" step="50" value="1500"><output id="segsOut">1500</output></div>
+
+  <div class="row"><label>Spin speed (rev/s)</label><input id="spin" type="range" min="0" max="2" step="0.01" value="0.35"><output id="spinOut">0.35</output></div>
+  <div class="row">
+    <label>Top cap spins</label>
+    <select id="topDir">
+      <option value="ccw" selected>CCW (counter-clockwise)</option>
+      <option value="cw">CW (clockwise)</option>
+    </select>
+  </div>
+  <div class="row">
+    <label>Curl handedness</label>
+    <select id="curlHand">
+      <option value="ccw" selected>CCW (+1)</option>
+      <option value="cw">CW (−1)</option>
+    </select>
+  </div>
+
+  <div class="row"><label>Hue shift (cycles along length)</label><input id="hueCycles" type="range" min="0.25" max="6" step="0.05" value="1.0"><output id="hueCyclesOut">1.00</output></div>
+
+  <div class="row">
+    <label class="small"><input id="togglePulse" type="checkbox"> Electric pulse</label>
+    <label class="small"><input id="toggleCones" type="checkbox"> Show cones</label>
+    <label class="small"><input id="toggleGrid" type="checkbox" checked> Grid</label>
+    <label class="small"><input id="toggleAxes" type="checkbox"> Axes</label>
+  </div>
+
+  <div class="section small">
+    <strong>Highlights (seed vortexes)</strong>
+    <div class="subgrid">
+      <label><input id="toggleHL" type="checkbox" checked> Enable highlights</label><span></span>
+      <label>Core thickness ×</label>
+      <div><input id="hlThick" type="range" min="1" max="3" step="0.05" value="1.6"><output id="hlThickOut">1.60</output></div>
+      <label>Glow jacket radius ×</label>
+      <div><input id="hlGlow" type="range" min="1.2" max="4" step="0.05" value="2.4"><output id="hlGlowOut">2.40</output></div>
+      <label>Glow opacity</label>
+      <div><input id="hlOpacity" type="range" min="0.05" max="1" step="0.01" value="0.35"><output id="hlOpacityOut">0.35</output></div>
+      <label>Emissive boost ×</label>
+      <div><input id="hlIntensity" type="range" min="1" max="6" step="0.1" value="2.2"><output id="hlIntensityOut">2.20</output></div>
+    </div>
+  </div>
+
+  <div class="row">
+    <button id="resetView">Reset view</button>
+    <button id="seedView">Seed alignment view</button>
+  </div>
+
+  <div class="row">
+    <label class="small"><input id="onlySeeds" type="checkbox"> Show only seed vortexes</label>
+  </div>
+
+  <div class="section small">
+    <strong>Pulse controls</strong>
+    <div class="row"><label>Pulse rate (cycles/s)</label><input id="pulseRate" type="range" min="0.05" max="4" step="0.01" value="1.0"><output id="pulseRateOut">1.00</output></div>
+    <div class="row"><label>Pulse width</label><input id="pulseWidth" type="range" min="0.01" max="0.25" step="0.005" value="0.06"><output id="pulseWidthOut">0.060</output></div>
+    <div class="row"><label>Pulse intensity</label><input id="pulseIntensity" type="range" min="0" max="3" step="0.05" value="1.4"><output id="pulseIntensityOut">1.40</output></div>
+  </div>
+</div>
+
+<!-- Import map -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+  import * as THREE from "three";
+  import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+  // ===== Constants =====
+  const PHI = (1 + Math.sqrt(5)) / 2;
+  const K = 2 * Math.log(PHI) / Math.PI;            // r = a * e^{-Kθ}
+  const APEX_DEG = 63.435;
+  const HALF_ANGLE = (APEX_DEG * Math.PI / 180) / 2;
+  const m = Math.tan(HALF_ANGLE);
+  const TWO_PI = Math.PI * 2;
+
+  // ===== UI refs =====
+  const $ = id => document.getElementById(id);
+  const ui = {
+    a:$('a'), turns:$('turns'), thick:$('thick'), segs:$('segs'),
+    spin:$('spin'), topDir:$('topDir'), curlHand:$('curlHand'),
+    hueCycles:$('hueCycles'),
+    toggleGrid:$('toggleGrid'), toggleAxes:$('toggleAxes'), toggleCones:$('toggleCones'), togglePulse:$('togglePulse'),
+    pulseRate:$('pulseRate'), pulseWidth:$('pulseWidth'), pulseIntensity:$('pulseIntensity'),
+    toggleHL:$('toggleHL'), hlThick:$('hlThick'), hlGlow:$('hlGlow'), hlOpacity:$('hlOpacity'), hlIntensity:$('hlIntensity'),
+    onlySeeds:$('onlySeeds'),
+    aOut:$('aOut'), turnsOut:$('turnsOut'), thickOut:$('thickOut'), segsOut:$('segsOut'), spinOut:$('spinOut'),
+    hueCyclesOut:$('hueCyclesOut'), hlThickOut:$('hlThickOut'), hlGlowOut:$('hlGlowOut'), hlOpacityOut:$('hlOpacityOut'),
+    hlIntensityOut:$('hlIntensityOut'),
+    pulseRateOut:$('pulseRateOut'), pulseWidthOut:$('pulseWidthOut'), pulseIntensityOut:$('pulseIntensityOut'),
+    resetView:$('resetView'), seedView:$('seedView')
+  };
+
+  // ===== Scene & renderer =====
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0e13);
+  const camera = new THREE.PerspectiveCamera(56, innerWidth/innerHeight, 0.01, 2000);
+  camera.position.set(4.6, 3.3, 4.8);
+
+  const appEl = document.getElementById('app');
+  const canvas = document.createElement('canvas');
+  canvas.style.width = '100%'; canvas.style.height = '100%';
+  appEl.appendChild(canvas);
+
+  function overlay(msg){
+    const el=document.createElement('div');
+    el.style.cssText='position:fixed;inset:0;display:grid;place-items:center;background:#0b0e13;color:#e7eaee;';
+    el.innerHTML='<div style="padding:24px;border:1px solid #233244;border-radius:12px;background:#0f1725cc">'+msg+'</div>';
+    return el;
+  }
+
+  let gl=null;
+  try{
+    gl=canvas.getContext('webgl2',{antialias:true,alpha:false});
+    if(!gl) gl=canvas.getContext('webgl',{antialias:true,alpha:false});
+  }catch(e){gl=null;}
+  if(!gl){
+    document.body.appendChild(overlay('Could not create a WebGL context.'));
+    throw new Error('No WebGL context');
+  }
+  const renderer = new THREE.WebGLRenderer({ canvas, context: gl });
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+
+  // Lights / helpers
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x0a0f15, 0.64));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.96);
+  dir.position.set(3,5,4); scene.add(dir);
+
+  const grid = new THREE.GridHelper(18, 18, 0x33506e, 0x1e2a3a);
+  grid.material.transparent = true; grid.material.opacity = 0.85; scene.add(grid);
+  const axes = new THREE.AxesHelper(1.8); axes.visible = false; scene.add(axes);
+
+  const worldGroup = new THREE.Group(); scene.add(worldGroup);
+
+  // ===== Utils =====
+  function deepDispose(obj){
+    obj.traverse(n=>{
+      if(n.geometry) n.geometry.dispose();
+      if(n.material){ if(Array.isArray(n.material)) n.material.forEach(m=>m?.dispose?.()); else n.material.dispose?.(); }
+    });
+    while(obj.children.length) obj.remove(obj.children[0]);
+  }
+
+  // -- Icosahedron directions (12) in some arbitrary orientation
+  function icosahedronDirections(){
+    const f=PHI, c=[
+      [0,1,f],[0,1,-f],[0,-1,f],[0,-1,-f],
+      [1,f,0],[-1,f,0],[1,-f,0],[-1,-f,0],
+      [f,0,1],[f,0,-1],[-f,0,1],[-f,0,-1]
+    ];
+    return c.map(([x,y,z])=>new THREE.Vector3(x,y,z).normalize());
+  }
+
+  // -- Opposite pairing helper
+  function pairOpposites(dirs){
+    const used=new Array(dirs.length).fill(false), out=[];
+    for(let i=0;i<dirs.length;i++){
+      if(used[i]) continue; let best=-1, bestDot=1;
+      for(let j=i+1;j<dirs.length;j++){
+        if(used[j]) continue; const dot=dirs[i].dot(dirs[j]);
+        if(dot<bestDot){bestDot=dot; best=j;}
+      }
+      if(best>=0){ used[i]=used[best]=true; out.push([i,best]); }
+    }
+    return out;
+  }
+
+  // -- Build 5-neighbor adjacency per vertex (exclude opposite)
+  function buildAdjacency(dirs, pairs){
+    const n=dirs.length, adj=Array.from({length:n},()=>[]);
+    for(let i=0;i<n;i++){
+      const opp = pairs.find(p=>p.includes(i))?.find(ix=>ix!==i);
+      const scores=[];
+      for(let j=0;j<n;j++){
+        if(j===i||j===opp) continue;
+        scores.push([j, dirs[i].dot(dirs[j])]);
+      }
+      scores.sort((a,b)=>b[1]-a[1]);
+      adj[i]=scores.slice(0,5).map(s=>s[0]);
+    }
+    return adj;
+  }
+
+  // ===== ALIGN the geometry so the seed is exactly +Y =====
+  const rawDirections = icosahedronDirections();
+
+  // choose a seed (max Y in raw)
+  let topSeed = rawDirections.reduce((best, v, i)=>(v.y>rawDirections[best].y?i:best), 0);
+
+  // rotate all directions so chosen seed aligns with +Y
+  const alignQuat = new THREE.Quaternion().setFromUnitVectors(
+    rawDirections[topSeed].clone().normalize(),
+    new THREE.Vector3(0,1,0)
+  );
+  const directions = rawDirections.map(v=>v.clone().applyQuaternion(alignQuat));
+
+  // recompute opposite pairs & adjacency on the aligned directions
+  const pairs = pairOpposites(directions);
+  const adjacency = buildAdjacency(directions, pairs);
+
+  // find opposite seed index (paired with topSeed)
+  const oppSeed = pairs.find(p=>p.includes(topSeed)).find(ix=>ix!==topSeed);
+
+  // sanity: after alignment, topSeed is at +Y, oppSeed at −Y (tiny FP tolerances ok)
+  // build caps
+  const topCap = new Set([topSeed, ...adjacency[topSeed]]);
+  const bottomCap = new Set([oppSeed, ...adjacency[oppSeed]]);
+
+  // ===== Curves =====
+  class ConeLogSpiralLocal extends THREE.Curve{
+    constructor({a,thetaMax,handed=+1,phase=0}){ super(); this.a=a; this.thetaMax=thetaMax; this.handed=Math.sign(handed)||+1; this.phase=phase; }
+    getPoint(t){
+      const th=t*this.thetaMax, r=this.a*Math.exp(-K*th), ang=this.handed*th+this.phase;
+      return new THREE.Vector3(r*Math.cos(ang), r/m, r*Math.sin(ang));
+    }
+  }
+
+  // ===== Material (rainbow gradient + optional pulse + highlight boost) =====
+  function makeSpiralMaterial({ baseHue = 0.0, hueCycles = 1.0, hlBoost = 1.0 }){
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, roughness: 0.35, metalness: 0.15,
+      emissive: new THREE.Color(0x062838), emissiveIntensity: 0.18
+    });
+
+    const U = mat.userData.uniforms = {
+      uTime:{value:0.0}, uEnabled:{value:0.0}, uRate:{value:+ui.pulseRate.value},
+      uWidth:{value:+ui.pulseWidth.value}, uIntensity:{value:+ui.pulseIntensity.value},
+      uBaseHue:{value:baseHue}, uHueCycles:{value:hueCycles}, uHLBoost:{value:hlBoost}
+    };
+
+    mat.onBeforeCompile = (shader) => {
+      shader.defines = shader.defines || {}; shader.defines.USE_UV = '';
+      Object.assign(shader.uniforms, U);
+
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', `#include <common>\nvarying vec2 vUv2;`)
+        .replace('#include <uv_vertex>', `#include <uv_vertex>\nvUv2 = uv;`);
+
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          `#include <common>
+           varying vec2 vUv2;
+           uniform float uTime, uEnabled, uRate, uWidth, uIntensity;
+           uniform float uBaseHue, uHueCycles, uHLBoost;
+           vec3 hsv2rgb(vec3 c){
+             vec3 rgb = clamp( abs(mod(c.x*6.0+vec3(0.0,4.0,2.0),6.0)-3.0)-1.0, 0.0, 1.0 );
+             return c.z * mix(vec3(1.0), rgb, c.y);
+           }`
+        )
+        .replace(
+          '#include <color_fragment>',
+          `#include <color_fragment>
+           float H = fract(uBaseHue + uHueCycles * vUv2.y);
+           vec3 rainbow = hsv2rgb(vec3(H, 1.0, 1.0));
+           diffuseColor.rgb = rainbow;`
+        )
+        .replace(
+          '#include <emissivemap_fragment>',
+          `
+          #include <emissivemap_fragment>
+          totalEmissiveRadiance += diffuseColor.rgb * (0.06 * max(uHLBoost - 1.0, 0.0));
+          if ( uEnabled > 0.5 ) {
+            float head = fract(uTime * uRate);
+            float d = (vUv2.y - head) / max(uWidth, 1e-4);
+            float falloff = exp(-d*d);
+            totalEmissiveRadiance += diffuseColor.rgb * (uIntensity * uHLBoost * falloff);
+          }`
+        );
+    };
+
+    return mat;
+  }
+
+  // ===== Build one face (5 spirals) =====
+  function buildFaceGroup(faceIndex, {thetaMax, handed, segs, thick, cones, baseHue, hueCycles, highlight}){
+    const n = directions[faceIndex];
+    const group = new THREE.Group();
+    group.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), n);
+
+    const mats = [];
+    const phaseStep = (2*Math.PI)/5;
+
+    const hlOn = ui.toggleHL.checked && !!highlight;
+    const coreMul = hlOn ? (+ui.hlThick.value) : 1.0;
+    const glowMul = hlOn ? (+ui.hlGlow.value)  : 0.0;
+    const glowOpacity = Math.max(0.0, Math.min(1.0, Number(ui.hlOpacity.value) || 0.35));
+    const hlBoost = hlOn ? (+ui.hlIntensity.value) : 1.0;
+
+    for(let k=0; k<5; k++){
+      const curve = new ConeLogSpiralLocal({ a:+ui.a.value, thetaMax, handed, phase:k*phaseStep });
+
+      const coreGeom = new THREE.TubeGeometry(curve, segs, thick * coreMul, 16, false);
+      const coreMat  = makeSpiralMaterial({ baseHue, hueCycles, hlBoost });
+      const coreMesh = new THREE.Mesh(coreGeom, coreMat);
+      group.add(coreMesh); mats.push(coreMat);
+
+      if (hlOn && glowMul > 1.01){
+        const glowGeom = new THREE.TubeGeometry(curve, segs, thick * glowMul, 16, false);
+        const color = new THREE.Color().setHSL(baseHue, 1, 0.6);
+        const glowMat = new THREE.MeshBasicMaterial({
+          color, transparent:true, opacity: glowOpacity,
+          blending: THREE.AdditiveBlending, depthWrite:false
+        });
+        const glowMesh = new THREE.Mesh(glowGeom, glowMat);
+        glowMesh.renderOrder = 3;
+        group.add(glowMesh);
+      }
+    }
+
+    if (cones){
+      const a = +ui.a.value, h = a/m;
+      const coneGeom = new THREE.ConeGeometry(a, h, 48, 1, true);
+      coneGeom.translate(0, h/2, 0); coneGeom.translate(0, -h, 0);
+      const coneMat = new THREE.MeshBasicMaterial({ wireframe:true, color:0x6688aa, transparent:true, opacity:0.22, depthWrite:false });
+      const cone = new THREE.Mesh(coneGeom, coneMat);
+      cone.renderOrder = 1;
+      group.add(cone);
+    }
+
+    return { group, mats };
+  }
+
+  // ===== Build ALL (FULL REBUILD) =====
+  const spinningGroups=[]; // {group, spinSign}
+  let allMats=[];
+
+  function buildAll(){
+    worldGroup.children.slice().forEach(ch=>{ deepDispose(ch); worldGroup.remove(ch); });
+    spinningGroups.length=0; allMats.length=0;
+
+    const turns  = +ui.turns.value;
+    const segs   = Math.max(50, Math.floor(+ui.segs.value));
+    const thick  = Math.max(0.001, Math.min(0.5, Number(ui.thick.value) || 0.02));
+    const hueCycles = Math.max(0.0, Number(ui.hueCycles.value) || 1.0);
+
+    const thetaMax = turns * TWO_PI;
+    const cones    = ui.toggleCones.checked;
+    const handed   = (ui.curlHand.value==='ccw') ? +1 : -1;
+
+    const topCCW = (ui.topDir.value==='ccw');
+    const topSign = topCCW ? +1 : -1;
+
+    const onlySeeds = ui.onlySeeds.checked;
+
+    for(let faceIndex=0; faceIndex<directions.length; faceIndex++){
+      const isSeed   = (faceIndex === topSeed);
+      const isOppSeed= (faceIndex === oppSeed);
+      if (onlySeeds && !(isSeed || isOppSeed)) continue;
+
+      const baseHue = faceIndex / 12;
+      const highlight = (isSeed || isOppSeed);
+
+      const { group, mats } = buildFaceGroup(faceIndex, {
+        thetaMax, handed, segs, thick, cones, baseHue, hueCycles, highlight
+      });
+      worldGroup.add(group);
+
+      const isTopCap = topCap.has(faceIndex);
+      const spinSign = isTopCap ? topSign : -topSign;
+      spinningGroups.push({ group, spinSign });
+      allMats.push(...mats);
+    }
+
+    updatePulseUniforms(true);
+    syncOut();
+  }
+
+  // ===== Uniform helpers =====
+  function updatePulseUniforms(resetTime){
+    const en = ui.togglePulse.checked ? 1 : 0;
+    const rate = +ui.pulseRate.value, w = +ui.pulseWidth.value, inten = +ui.pulseIntensity.value;
+    allMats.forEach(m=>{
+      const U=m.userData.uniforms; if(!U) return;
+      if (resetTime) U.uTime.value=0.0;
+      U.uEnabled.value=en; U.uRate.value=rate; U.uWidth.value=w; U.uIntensity.value=inten;
+      m.needsUpdate=true;
+    });
+  }
+
+  // ===== Camera helpers =====
+  function resetView(){
+    camera.position.set(4.6,3.3,4.8);
+    controls.target.set(0,0.6,0);
+    controls.update();
+  }
+
+  // perfect alignment along +Y → looks straight at the top seed
+  function seedAlignmentView(){
+    const dist = Math.max(6.0, 6.0 * (+ui.a.value) + 2.0);
+    camera.position.set(0, dist, 1e-3); // tiny z offset avoids gimbal singularity
+    controls.target.set(0,0,0);
+    controls.update();
+  }
+
+  // ===== UI sync & wiring =====
+  function syncOut(){
+    ui.aOut.textContent=(+ui.a.value).toFixed(2);
+    ui.turnsOut.textContent=(+ui.turns.value).toFixed(1);
+    ui.thickOut.textContent=(+ui.thick.value).toFixed(3);
+    ui.segsOut.textContent=(+ui.segs.value);
+    ui.spinOut.textContent=(+ui.spin.value).toFixed(2);
+    ui.hueCyclesOut.textContent=(+ui.hueCycles.value).toFixed(2);
+    ui.hlThickOut.textContent=(+ui.hlThick.value).toFixed(2);
+    ui.hlGlowOut.textContent=(+ui.hlGlow.value).toFixed(2);
+    ui.hlOpacityOut.textContent=(+ui.hlOpacity.value).toFixed(2);
+    ui.hlIntensityOut.textContent=(+ui.hlIntensity.value).toFixed(2);
+    ui.pulseRateOut.textContent=(+ui.pulseRate.value).toFixed(2);
+    ui.pulseWidthOut.textContent=(+ui.pulseWidth.value).toFixed(3);
+    ui.pulseIntensityOut.textContent=(+ui.pulseIntensity.value).toFixed(2);
+  }
+
+  ['a','turns','segs','thick','curlHand','toggleCones','topDir','hueCycles',
+   'toggleHL','hlThick','hlGlow','hlOpacity','hlIntensity','onlySeeds'
+  ].forEach(id=>{
+    const el = ui[id] ?? document.getElementById(id);
+    ['input','change'].forEach(evt=>{ el.addEventListener(evt, ()=>{ buildAll(); }); });
+  });
+
+  ui.togglePulse.addEventListener('change', ()=>{ updatePulseUniforms(true); syncOut(); });
+  ['pulseRate','pulseWidth','pulseIntensity'].forEach(id=>{
+    ui[id].addEventListener('input', ()=>{ syncOut(); updatePulseUniforms(false); });
+  });
+
+  ui.resetView.addEventListener('click', resetView);
+  ui.seedView.addEventListener('click', seedAlignmentView);
+
+  ui.toggleGrid.addEventListener('change', ()=>{ grid.visible = ui.toggleGrid.checked; });
+  ui.toggleAxes.addEventListener('change', ()=>{ axes.visible = ui.toggleAxes.checked; });
+
+  // ===== Init & animate =====
+  buildAll(); resetView();
+
+  const clock=new THREE.Clock();
+  function tick(){
+    const dt=clock.getDelta();
+    const angVel=TWO_PI*(+ui.spin.value); // rad/s
+
+    for(const {group,spinSign} of spinningGroups){
+      group.rotateY(spinSign * angVel * dt);
+    }
+
+    if(ui.togglePulse.checked){
+      allMats.forEach(m=>{ const U=m.userData.uniforms; if(U) U.uTime.value+=dt; });
+    }
+
+    controls.update();
+    renderer.render(scene,camera);
+    requestAnimationFrame(tick);
+  }
+  tick();
+
+  addEventListener('resize', ()=>{
+    camera.aspect=innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+</script>
+</body>
+</html>
